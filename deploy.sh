@@ -20,9 +20,11 @@ git reset --hard origin/main
 
 # 3. Fix Permissions
 echo "Fixing file and storage permissions..."
-chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+mkdir -p storage/framework/{sessions,views,cache/data} storage/logs storage/app/public bootstrap/cache
+chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 find . -type d -exec chmod 755 {} +
 find . -type f -exec chmod 644 {} +
+chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 chmod +x deploy.sh
 
 # 4. Update Dependencies & Database
