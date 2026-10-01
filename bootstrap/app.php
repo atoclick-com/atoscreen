@@ -13,6 +13,24 @@ if (!file_exists($envPath) && file_exists($baseDir . '/.env.example')) {
     @copy($baseDir . '/.env.example', $envPath);
 }
 
+// 1b. Fix subdirectory routing: read APP_URL path prefix from .env and
+//     override SCRIPT_NAME/PHP_SELF so Symfony strips the /v/ prefix correctly.
+//     Without this, Laravel sees the path as "/v/install" instead of "/install".
+if (file_exists($envPath)) {
+    $rawEnv = file_get_contents($envPath);
+    if (preg_match('/^APP_URL\s*=\s*(.+)$/m', $rawEnv, $m)) {
+        $appUrl = trim($m[1]);
+        $urlPath = rtrim(parse_url($appUrl, PHP_URL_PATH) ?? '', '/');
+        if ($urlPath !== '' && $urlPath !== '/') {
+            // Set SCRIPT_NAME so Symfony's getBaseUrl() returns e.g. "/v"
+            // and getPathInfo() correctly strips it from "/v/install" → "/install"
+            $_SERVER['SCRIPT_NAME'] = $urlPath . '/index.php';
+            $_SERVER['PHP_SELF']    = $urlPath . '/index.php';
+        }
+    }
+}
+
+
 // 2. Patch .env: APP_KEY, SESSION_DRIVER, CACHE_STORE — handles LF and CRLF
 if (file_exists($envPath)) {
     $envContent = file_get_contents($envPath);
