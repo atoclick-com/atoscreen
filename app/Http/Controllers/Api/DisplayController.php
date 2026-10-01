@@ -78,21 +78,66 @@ class DisplayController extends Controller
         $screenFitMode = $settings->aspect_ratio_mode ?: 'cover';
 
         $formattedSlides = $activeSlides->map(function ($slide) use ($screen, $settings, $defaultDuration, $screenFitMode) {
+            $isMediaWithAudio = in_array($slide->type, ['video', 'instagram']);
             $audioEnabled = !is_null($slide->audio_enabled)
                 ? (bool) $slide->audio_enabled
                 : (bool) ($settings->audio_enabled ?? false);
+
+            if ($settings->audio_enabled && $isMediaWithAudio && $slide->audio_enabled !== false) {
+                $audioEnabled = true;
+            }
 
             $effectiveFitMode = $slide->fit_mode;
             if (!$effectiveFitMode || ($effectiveFitMode === 'ambient_blur' && in_array($screenFitMode, ['cover', 'contain']))) {
                 $effectiveFitMode = $screenFitMode;
             }
 
+            $filePath = $slide->file_path;
+            $content = is_array($slide->content) ? $slide->content : [];
+
+            // Auto-detect and attach local reel video cache if missing on the slide record
+            if ($slide->type === 'instagram' && empty($filePath)) {
+                $url = $content['url'] ?? '';
+                preg_match('/instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)/i', $url, $matches);
+                $shortcode = $matches[1] ?? '';
+
+                $candidates = [
+                    "screens/{$screen->id}/instagram/{$shortcode}.mp4",
+                    "screens/instagram/{$shortcode}.mp4",
+                    "screens/instagram/trotiluxe.mp4",
+                ];
+
+                foreach ($candidates as $cand) {
+                    $fullPath = storage_path("app/public/{$cand}");
+                    if (file_exists($fullPath) && filesize($fullPath) > 50000) {
+                        $filePath = $cand;
+                        $content['media_url'] = url("storage/{$cand}");
+                        $content['is_video'] = true;
+                        $content['media_type'] = 'reel';
+                        break;
+                    }
+                }
+            }
+
+            $fileUrl = null;
+            if ($filePath) {
+                if (str_starts_with($filePath, 'http://') || str_starts_with($filePath, 'https://')) {
+                    $fileUrl = $filePath;
+                } else {
+                    $clean = ltrim($filePath, '/');
+                    if (str_starts_with($clean, 'storage/')) {
+                        $clean = substr($clean, 8);
+                    }
+                    $fileUrl = url('storage/' . $clean);
+                }
+            }
+
             return [
                 'id' => $slide->id,
                 'type' => $slide->type, // image, video, html_promo, instagram
                 'title' => $slide->title,
-                'file_url' => $slide->file_url,
-                'content' => $slide->content,
+                'file_url' => $fileUrl,
+                'content' => $content,
                 'duration' => $slide->duration_override ?: $defaultDuration,
                 'display_order' => $slide->display_order,
                 'audio_enabled' => $audioEnabled,

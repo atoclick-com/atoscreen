@@ -231,6 +231,7 @@ const handleSaveAll = async () => {
         initForms();
         const qrUrl = updated?.short_url ? `https://${updated.short_url}` : (updated?.public_url || screen.value?.public_url);
         generateQrCode(qrUrl);
+        toastStore.success('Settings Saved', 'Screen settings applied and synced to TV in real time.');
     } catch (err) {
         const msg = err.response?.data?.message || err.message || 'Failed to save settings.';
         toastStore.error('Save Failed', msg);
@@ -477,12 +478,15 @@ const handleDeleteScreen = async () => {
                                 <Volume2 class="w-5 h-5 text-amber-400" />
                                 <h3 class="font-bold text-base text-zinc-100">Audio & Sound Playback</h3>
                             </div>
-                            <ToggleSwitch v-model="settingsForm.audio_enabled" />
+                            <ToggleSwitch
+                                v-model="settingsForm.audio_enabled"
+                                @update:model-value="handleSaveAll"
+                            />
                         </div>
 
                         <div class="space-y-4">
                             <p class="text-xs text-zinc-400 leading-relaxed">
-                                Control whether videos and Instagram reels play background audio on this screen. A discrete unmute pill will appear on the TV to respect browser autoplay policies.
+                                Control whether videos and Instagram reels play background audio on this screen. Audio starts automatically on TV when enabled.
                             </p>
 
                             <!-- Volume Slider -->
@@ -492,7 +496,9 @@ const handleDeleteScreen = async () => {
                                         <span>Master TV Volume</span>
                                         <span class="text-xs font-mono font-bold text-amber-400">{{ settingsForm.audio_volume }}%</span>
                                     </label>
-                                    <span class="text-[11px] text-zinc-500">{{ settingsForm.audio_enabled ? 'Sound Active' : 'Sound Muted' }}</span>
+                                    <span class="text-[11px] font-medium" :class="settingsForm.audio_enabled ? 'text-emerald-400' : 'text-zinc-500'">
+                                        {{ settingsForm.audio_enabled ? '✓ Sound Active' : 'Sound Muted' }}
+                                    </span>
                                 </div>
 
                                 <div class="flex items-center gap-4">
@@ -505,8 +511,24 @@ const handleDeleteScreen = async () => {
                                         step="5"
                                         :disabled="!settingsForm.audio_enabled"
                                         class="w-full accent-amber-500 cursor-pointer disabled:opacity-30"
+                                        @change="handleSaveAll"
                                     />
                                     <Volume2 class="w-4 h-4 text-amber-400 shrink-0" />
+                                </div>
+
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[11px] text-zinc-500">
+                                        {{ settingsForm.audio_enabled ? 'Broadcasts audio on TV screen' : 'Muted on TV screen' }}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        :disabled="screensStore.saving || savingAll"
+                                        @click="handleSaveAll"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        <Save class="w-3.5 h-3.5" />
+                                        <span>{{ (screensStore.saving || savingAll) ? 'Saving...' : 'Save Audio Settings' }}</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

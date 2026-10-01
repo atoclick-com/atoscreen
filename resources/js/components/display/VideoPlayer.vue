@@ -45,9 +45,16 @@ const syncVideos = () => {
         fgVideoRef.value.volume = Math.min(1, Math.max(0, props.volume));
         fgVideoRef.value.muted = !shouldPlayAudio.value;
         fgVideoRef.value.currentTime = 0;
-        fgVideoRef.value.play().catch((err) => {
-            console.warn('Foreground video play blocked or waiting:', err);
-        });
+        const playPromise = fgVideoRef.value.play();
+        if (playPromise !== undefined) {
+            playPromise.catch((err) => {
+                console.warn('Foreground video unmuted play blocked by browser policy, muting to start video immediately:', err);
+                if (fgVideoRef.value) {
+                    fgVideoRef.value.muted = true;
+                    fgVideoRef.value.play().catch(() => {});
+                }
+            });
+        }
     }
 
     if (bgVideoRef.value && props.fitMode === 'ambient_blur') {

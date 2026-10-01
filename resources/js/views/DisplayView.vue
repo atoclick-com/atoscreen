@@ -27,7 +27,7 @@ const isOffline = ref(false);
 const errorMessage = ref(null);
 const playlistChecksum = ref(null);
 const pendingPlaylist = ref(null);
-const isUserUnmuted = ref(false);
+const isUserUnmuted = ref(true);
 
 // Timers & listeners
 let slideTimer = null;
@@ -64,9 +64,10 @@ const currentFitMode = computed(() => {
 const isAudioActiveForSlide = computed(() => {
     if (!currentSlide.value) return false;
     if (currentSlide.value.type !== 'video' && currentSlide.value.type !== 'instagram') return false;
-    return currentSlide.value.audio_enabled !== undefined
-        ? !!currentSlide.value.audio_enabled
-        : !!settings.value?.audio_enabled;
+    if (settings.value?.audio_enabled) {
+        return currentSlide.value.audio_enabled !== false;
+    }
+    return !!currentSlide.value.audio_enabled;
 });
 
 const audioVolumeLevel = computed(() => {
@@ -429,6 +430,22 @@ onMounted(async () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mousemove', handleMouseMove);
     handleMouseMove();
+
+    // Unlock browser audio restrictions on any Smart TV remote keypress or screen tap
+    const unlockAudio = () => {
+        if (settings.value?.audio_enabled) {
+            isUserUnmuted.value = true;
+        }
+        document.querySelectorAll('video').forEach(v => {
+            if (settings.value?.audio_enabled) {
+                v.muted = false;
+                v.volume = audioVolumeLevel.value;
+                v.play().catch(() => {});
+            }
+        });
+    };
+    window.addEventListener('click', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
 });
 
 onUnmounted(() => {
