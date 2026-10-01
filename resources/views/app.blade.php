@@ -11,6 +11,8 @@
     @endphp
     <title>{{ $appName }} | {{ $businessName }}</title>
     <script>
+        // App base path for subdirectory deployments (e.g. '/v' when at trotiluxe.ma/v)
+        window.__APP_BASE__ = @json(rtrim(parse_url(config('app.url'), PHP_URL_PATH) ?? '', '/'));
         window.__APP_SETTINGS__ = {
             appName: @json($appName),
             businessName: @json($businessName)
