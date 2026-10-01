@@ -30,12 +30,21 @@ if (file_exists($envPath)) {
     }
 }
 
-// 3. Ensure SQLite database exists with write permissions
-$sqlitePath = $baseDir . '/database/database.sqlite';
-if (!file_exists($sqlitePath) && is_dir($baseDir . '/database')) {
+// 3. Ensure SQLite database and its directory exist with full write permissions
+$dbDir = $baseDir . '/database';
+if (!is_dir($dbDir)) {
+    @mkdir($dbDir, 0777, true);
+}
+@chmod($dbDir, 0777);
+
+$sqlitePath = $dbDir . '/database.sqlite';
+if (!file_exists($sqlitePath) && is_dir($dbDir)) {
     @touch($sqlitePath);
+}
+if (file_exists($sqlitePath)) {
     @chmod($sqlitePath, 0666);
 }
+
 
 // 4. Ensure all framework storage folders exist with full permissions
 $storageDirs = [

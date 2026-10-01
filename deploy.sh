@@ -41,7 +41,8 @@ mkdir -p storage/framework/{sessions,views,cache/data} storage/logs storage/app/
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 find . -type d -exec chmod 755 {} +
 find . -type f -exec chmod 644 {} +
-chmod -R 777 storage bootstrap/cache 2>/dev/null || true
+chmod -R 777 storage bootstrap/cache database 2>/dev/null || true
+chmod 666 database/database.sqlite 2>/dev/null || true
 chmod +x deploy.sh
 
 # 5. Update Dependencies & Database
