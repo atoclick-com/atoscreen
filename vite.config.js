@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import path from 'path';
 
@@ -11,7 +10,6 @@ export default defineConfig({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             refresh: true,
         }),
-        tailwindcss(),
         vue({
             template: {
                 transformAssetUrls: {
@@ -25,6 +23,11 @@ export default defineConfig({
         alias: {
             '@': path.resolve(__dirname, './resources/js'),
         },
+    },
+    build: {
+        // Target older Chromium (Samsung Tizen 5+, LG webOS 4+, Android TV)
+        target: ['es2015', 'chrome69'],
+        cssTarget: 'chrome69',
     },
     server: {
         watch: {
