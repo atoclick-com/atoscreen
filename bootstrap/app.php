@@ -13,9 +13,12 @@ if (!file_exists($envPath) && file_exists($baseDir . '/.env.example')) {
     @copy($baseDir . '/.env.example', $envPath);
 }
 
-// 2. Ensure APP_KEY exists and is valid
+// 2. Patch .env: APP_KEY, SESSION_DRIVER, CACHE_STORE — handles LF and CRLF
 if (file_exists($envPath)) {
     $envContent = file_get_contents($envPath);
+    $envChanged = false;
+
+    // 2a. Auto-generate APP_KEY if missing/empty
     if (!preg_match('/^APP_KEY=base64:[a-zA-Z0-9+\/=]{44}/m', $envContent)) {
         $generatedKey = 'base64:' . base64_encode(random_bytes(32));
         if (preg_match('/^APP_KEY=.*$/m', $envContent)) {
@@ -23,10 +26,32 @@ if (file_exists($envPath)) {
         } else {
             $envContent .= "\nAPP_KEY=" . $generatedKey . "\n";
         }
-        @file_put_contents($envPath, $envContent);
         putenv("APP_KEY={$generatedKey}");
         $_ENV['APP_KEY'] = $generatedKey;
         $_SERVER['APP_KEY'] = $generatedKey;
+        $envChanged = true;
+    }
+
+    // 2b. Force SESSION_DRIVER=file (database driver fails on readonly cPanel SQLite)
+    if (preg_match('/^SESSION_DRIVER\s*=\s*database\s*$/im', $envContent)) {
+        $envContent = preg_replace('/^SESSION_DRIVER\s*=\s*database\s*$/im', 'SESSION_DRIVER=file', $envContent);
+        $envChanged = true;
+    }
+    putenv('SESSION_DRIVER=file');
+    $_ENV['SESSION_DRIVER'] = 'file';
+    $_SERVER['SESSION_DRIVER'] = 'file';
+
+    // 2c. Force CACHE_STORE=file (same reason)
+    if (preg_match('/^CACHE_STORE\s*=\s*database\s*$/im', $envContent)) {
+        $envContent = preg_replace('/^CACHE_STORE\s*=\s*database\s*$/im', 'CACHE_STORE=file', $envContent);
+        $envChanged = true;
+    }
+    putenv('CACHE_STORE=file');
+    $_ENV['CACHE_STORE'] = 'file';
+    $_SERVER['CACHE_STORE'] = 'file';
+
+    if ($envChanged) {
+        @file_put_contents($envPath, $envContent);
     }
 }
 
@@ -44,7 +69,6 @@ if (!file_exists($sqlitePath) && is_dir($dbDir)) {
 if (file_exists($sqlitePath)) {
     @chmod($sqlitePath, 0666);
 }
-
 
 // 4. Ensure all framework storage folders exist with full permissions
 $storageDirs = [
@@ -89,16 +113,6 @@ if (!$viewsWritable) {
     $_SERVER['VIEW_COMPILED_PATH'] = $fallbackViews;
 }
 
-// 6. If application is not installed yet, use file-based session & cache
-if (!file_exists($baseDir . '/storage/installed')) {
-    putenv('SESSION_DRIVER=file');
-    $_ENV['SESSION_DRIVER'] = 'file';
-    $_SERVER['SESSION_DRIVER'] = 'file';
-    putenv('CACHE_STORE=file');
-    $_ENV['CACHE_STORE'] = 'file';
-    $_SERVER['CACHE_STORE'] = 'file';
-}
-
 $app = Application::configure(basePath: $baseDir)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -127,7 +141,7 @@ $app = Application::configure(basePath: $baseDir)
         });
     })->create();
 
-// 6. Suppress harmless PHP tempnam() E_NOTICE on shared hosting/cPanel
+// Suppress harmless PHP tempnam() E_NOTICE on shared hosting/cPanel
 $app->booted(function () use ($sqlitePath) {
     set_error_handler(function ($severity, $message, $file = '', $line = 0) {
         if (str_contains($message, 'tempnam()')) {
