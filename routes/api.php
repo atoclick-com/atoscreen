@@ -76,8 +76,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // User Access Information & Password
     Route::post('/user/profile', [\App\Http\Controllers\Api\AppSettingController::class, 'updateProfile']);
     Route::post('/user/password', [\App\Http\Controllers\Api\AppSettingController::class, 'updatePassword']);
-
-    // Setup Wizard Endpoints
-    Route::get('/wizard/initial-data', [\App\Http\Controllers\Api\SetupWizardController::class, 'initialData']);
-    Route::post('/wizard/complete', [\App\Http\Controllers\Api\SetupWizardController::class, 'complete']);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Setup Wizard Endpoints (Installation & Initial Setup)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('v1/wizard')->group(function () {
+    Route::get('/initial-data', [\App\Http\Controllers\Api\SetupWizardController::class, 'initialData']);
+    Route::post('/complete', [\App\Http\Controllers\Api\SetupWizardController::class, 'complete']);
+});
+

@@ -248,6 +248,9 @@ class SetupWizardController extends Controller
 
             $screen->load(['settings', 'slides']);
 
+            // Mark system as installed so CheckInstallation middleware unlocks the full app
+            @touch(storage_path('installed'));
+
             return response()->json([
                 'success' => true,
                 'message' => 'Setup wizard completed successfully!',

@@ -40,9 +40,10 @@ const routes = [
     },
     {
         path: '/wizard',
+        alias: '/install',
         name: 'setup-wizard',
         component: () => import('@/views/SetupWizardView.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: false },
     },
     {
         path: '/v/:code',

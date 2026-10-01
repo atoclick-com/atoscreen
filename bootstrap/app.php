@@ -80,6 +80,16 @@ if (!$viewsWritable) {
     $_SERVER['VIEW_COMPILED_PATH'] = $fallbackViews;
 }
 
+// 6. If application is not installed yet, use file-based session & cache
+if (!file_exists($baseDir . '/storage/installed')) {
+    putenv('SESSION_DRIVER=file');
+    $_ENV['SESSION_DRIVER'] = 'file';
+    $_SERVER['SESSION_DRIVER'] = 'file';
+    putenv('CACHE_STORE=file');
+    $_ENV['CACHE_STORE'] = 'file';
+    $_SERVER['CACHE_STORE'] = 'file';
+}
+
 $app = Application::configure(basePath: $baseDir)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -88,7 +98,16 @@ $app = Application::configure(basePath: $baseDir)
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->validateCsrfTokens(except: [
+            'install/*',
+        ]);
+
+        $middleware->web(append: [
+            \App\Http\Middleware\CheckInstallation::class,
+        ]);
+        $middleware->api(append: [
+            \App\Http\Middleware\CheckInstallation::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Intercept any stray tempnam notices/exceptions and still render the app
