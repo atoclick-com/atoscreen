@@ -97,18 +97,7 @@ return [
 
     'cipher' => 'AES-256-CBC',
 
-    'key' => env('APP_KEY') ?: (function () {
-        $keyFile = storage_path('framework/app.key');
-        if (file_exists($keyFile)) {
-            $existing = trim(file_get_contents($keyFile));
-            if (!empty($existing)) {
-                return $existing;
-            }
-        }
-        $generated = 'base64:' . base64_encode(random_bytes(32));
-        @file_put_contents($keyFile, $generated);
-        return $generated;
-    })(),
+    'key' => env('APP_KEY'),
 
     'previous_keys' => [
         ...array_filter(
