@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue';
+import { resolveMediaUrl } from '@/api/media';
 import {
     GripVertical,
     Image,
@@ -46,16 +47,15 @@ const emit = defineEmits([
 ]);
 
 const thumbnailSrc = computed(() => {
+    let raw = null;
     if (props.slide.type === 'image' || props.slide.type === 'video') {
-        return props.slide.file_url;
+        raw = props.slide.file_url;
+    } else if (props.slide.type === 'html_promo' && props.slide.content?.image_url) {
+        raw = props.slide.content.image_url;
+    } else if (props.slide.type === 'instagram') {
+        raw = props.slide.content?.media_url || props.slide.content?.image_url || props.slide.file_url;
     }
-    if (props.slide.type === 'html_promo' && props.slide.content?.image_url) {
-        return props.slide.content.image_url;
-    }
-    if (props.slide.type === 'instagram') {
-        return props.slide.content?.media_url || props.slide.content?.image_url || props.slide.file_url;
-    }
-    return null;
+    return resolveMediaUrl(raw);
 });
 
 const hasSchedule = computed(() => {

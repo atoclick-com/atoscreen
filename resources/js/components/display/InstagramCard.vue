@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue';
 import QRCode from 'qrcode';
+import { resolveMediaUrl } from '@/api/media';
 import { Heart, MessageCircle, Instagram, CheckCircle2, QrCode, ExternalLink, Play } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -52,7 +53,8 @@ const embedUrl = computed(() => {
 });
 
 const mediaSrc = computed(() => {
-    return props.mediaUrl || props.content?.media_url || props.content?.image_url || null;
+    const raw = props.mediaUrl || props.content?.media_url || props.content?.image_url || null;
+    return resolveMediaUrl(raw);
 });
 
 const isVideo = computed(() => {

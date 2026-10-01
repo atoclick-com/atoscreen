@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { resolveMediaUrl } from '@/api/media';
 import { UtensilsCrossed } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -20,6 +21,8 @@ const props = defineProps({
         default: 'AtoFood',
     },
 });
+
+const resolvedLogoUrl = computed(() => resolveMediaUrl(props.logoUrl));
 
 const positionClasses = computed(() => {
     switch (props.position) {
@@ -43,9 +46,9 @@ const positionClasses = computed(() => {
         :class="positionClasses"
     >
         <!-- Custom Uploaded Logo -->
-        <div v-if="logoUrl" class="p-2 rounded-2xl glass-pill shadow-2xl backdrop-blur-md">
+        <div v-if="resolvedLogoUrl" class="p-2 rounded-2xl glass-pill shadow-2xl backdrop-blur-md">
             <img
-                :src="logoUrl"
+                :src="resolvedLogoUrl"
                 alt="Brand Logo"
                 class="h-10 md:h-14 w-auto object-contain max-w-[200px] drop-shadow-lg"
             />

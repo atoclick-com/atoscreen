@@ -64,7 +64,12 @@ class ScreenSetting extends Model
             return $this->logo_path;
         }
 
-        return '/storage/' . ltrim($this->logo_path, '/');
+        $cleanPath = ltrim($this->logo_path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
+        }
+
+        return url('storage/' . $cleanPath);
     }
 
     public function screen(): BelongsTo

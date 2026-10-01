@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { resolveMediaUrl } from '@/api/media';
 
 const props = defineProps({
     src: {
@@ -27,6 +28,8 @@ const props = defineProps({
         default: false,
     },
 });
+
+const resolvedSrc = computed(() => resolveMediaUrl(props.src));
 
 const emit = defineEmits(['ended', 'error']);
 
@@ -68,7 +71,7 @@ onMounted(() => {
     syncVideos();
 });
 
-watch(() => props.src, () => {
+watch(() => resolvedSrc.value, () => {
     syncVideos();
 });
 
@@ -108,7 +111,7 @@ const onVideoError = (err) => {
         >
             <video
                 ref="bgVideoRef"
-                :src="src"
+                :src="resolvedSrc"
                 autoplay
                 muted
                 loop
@@ -131,7 +134,7 @@ const onVideoError = (err) => {
         >
             <video
                 ref="fgVideoRef"
-                :src="src"
+                :src="resolvedSrc"
                 autoplay
                 :muted="!shouldPlayAudio"
                 playsinline

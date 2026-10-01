@@ -57,7 +57,12 @@ class Slide extends Model
             return $this->file_path;
         }
 
-        return '/storage/' . ltrim($this->file_path, '/');
+        $cleanPath = ltrim($this->file_path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
+        }
+
+        return url('storage/' . $cleanPath);
     }
 
     public function getIsInScheduleAttribute(): bool

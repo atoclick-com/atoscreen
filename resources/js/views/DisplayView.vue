@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import axios from 'axios';
 import api from '@/api/client';
 import { subscribeToScreenUpdates } from '@/api/realtimeSync';
+import { resolveMediaUrl } from '@/api/media';
 import KenBurnsImage from '@/components/display/KenBurnsImage.vue';
 import VideoPlayer from '@/components/display/VideoPlayer.vue';
 import HtmlPromoCard from '@/components/display/HtmlPromoCard.vue';
@@ -285,13 +286,13 @@ const preloadNextSlide = () => {
 
     if (next.type === 'image' && next.file_url) {
         const img = new Image();
-        img.src = next.file_url;
+        img.src = resolveMediaUrl(next.file_url);
     } else if (next.type === 'html_promo' && next.content?.image_url) {
         const img = new Image();
-        img.src = next.content.image_url;
+        img.src = resolveMediaUrl(next.content.image_url);
     } else if (next.type === 'instagram' && next.content?.image_url) {
         const img = new Image();
-        img.src = next.content.image_url;
+        img.src = resolveMediaUrl(next.content.image_url);
     }
 };
 
@@ -504,7 +505,7 @@ onUnmounted(() => {
                     <!-- Image Slide -->
                     <KenBurnsImage
                         v-if="currentSlide.type === 'image'"
-                        :src="currentSlide.file_url"
+                        :src="resolveMediaUrl(currentSlide.file_url)"
                         :alt="currentSlide.title"
                         :fit-mode="currentFitMode"
                     />
@@ -512,7 +513,7 @@ onUnmounted(() => {
                     <!-- Video Slide -->
                     <VideoPlayer
                         v-else-if="currentSlide.type === 'video'"
-                        :src="currentSlide.file_url"
+                        :src="resolveMediaUrl(currentSlide.file_url)"
                         :loop="slides.length === 1"
                         :fit-mode="currentFitMode"
                         :audio-enabled="isAudioActiveForSlide"
@@ -526,7 +527,7 @@ onUnmounted(() => {
                     <InstagramCard
                         v-else-if="currentSlide.type === 'instagram'"
                         :content="currentSlide.content"
-                        :media-url="currentSlide.file_url || currentSlide.content?.media_url"
+                        :media-url="resolveMediaUrl(currentSlide.file_url || currentSlide.content?.media_url)"
                         :audio-enabled="isAudioActiveForSlide && isUserUnmuted"
                         :accent-color="settings?.accent_color || '#f59e0b'"
                         :fit-mode="currentFitMode"
@@ -545,7 +546,7 @@ onUnmounted(() => {
             <!-- Brand Logo Overlay -->
             <BrandingOverlay
                 v-if="settings?.logo_overlay_enabled"
-                :logo-url="settings?.logo_url"
+                :logo-url="resolveMediaUrl(settings?.logo_url)"
                 :position="settings?.logo_position"
                 :accent-color="settings?.accent_color"
                 :business-name="settings?.business_name"

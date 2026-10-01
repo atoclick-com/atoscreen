@@ -1,5 +1,8 @@
 <script setup>
-defineProps({
+import { computed } from 'vue';
+import { resolveMediaUrl } from '@/api/media';
+
+const props = defineProps({
     src: {
         type: String,
         required: true,
@@ -17,6 +20,8 @@ defineProps({
         default: 'ambient_blur', // ambient_blur, cover, contain
     },
 });
+
+const resolvedSrc = computed(() => resolveMediaUrl(props.src));
 </script>
 
 <template>
@@ -27,7 +32,7 @@ defineProps({
             class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none"
         >
             <img
-                :src="src"
+                :src="resolvedSrc"
                 :alt="alt"
                 class="absolute inset-0 w-full h-full object-cover blur-3xl opacity-40 scale-125 brightness-75 pointer-events-none"
             />
@@ -44,7 +49,7 @@ defineProps({
             ]"
         >
             <img
-                :src="src"
+                :src="resolvedSrc"
                 :alt="alt"
                 class="transition-all duration-1000"
                 :class="[

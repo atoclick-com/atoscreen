@@ -320,7 +320,7 @@ class SlideController extends Controller
         $localFileName = "{$shortcode}.mp4";
         $localFilePath = "{$dir}/{$localFileName}";
         $relativeStoragePath = "screens/{$screen->id}/instagram/{$localFileName}";
-        $publicUrl = "/storage/{$relativeStoragePath}";
+        $publicUrl = url("storage/{$relativeStoragePath}");
 
         // Check if already downloaded for this screen
         if (file_exists($localFilePath) && filesize($localFilePath) > 50000) {

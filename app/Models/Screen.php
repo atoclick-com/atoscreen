@@ -81,7 +81,11 @@ class Screen extends Model
         if ($displayBase) {
             return rtrim($displayBase, '/') . "/v/{$code}";
         }
-        return url("/v/{$code}");
+        $root = rtrim(url('/'), '/');
+        if (str_ends_with($root, '/v')) {
+            return "{$root}/{$code}";
+        }
+        return "{$root}/v/{$code}";
     }
 
     public function getShortUrlAttribute(): string
@@ -89,13 +93,15 @@ class Screen extends Model
         $domain = \App\Models\AppSetting::get('display_domain') ?: env('DISPLAY_DOMAIN', 'trotiluxe.ma');
         $cleanDomain = preg_replace('#^https?://#', '', rtrim($domain, '/'));
         $code = $this->short_code ?: '1';
+        if (str_ends_with($cleanDomain, '/v')) {
+            return "{$cleanDomain}/{$code}";
+        }
         return "{$cleanDomain}/v/{$code}";
     }
 
     public function getLocalUrlAttribute(): string
     {
-        $code = $this->short_code ?: $this->id;
-        return url("/v/{$code}");
+        return $this->getPublicUrlAttribute();
     }
 
     public function user(): BelongsTo

@@ -8,6 +8,7 @@ import SlideList from '@/components/editor/SlideList.vue';
 import PromoSlideModal from '@/components/editor/PromoSlideModal.vue';
 import InstagramSlideModal from '@/components/editor/InstagramSlideModal.vue';
 import ScheduleModal from '@/components/editor/ScheduleModal.vue';
+import { resolveMediaUrl } from '@/api/media';
 import { useScreensStore } from '@/stores/screens';
 import { useToastStore } from '@/stores/toast';
 import {
@@ -303,7 +304,7 @@ const refreshScreen = async () => {
             <div v-if="previewingVideo" class="space-y-4">
                 <div class="rounded-2xl overflow-hidden bg-black aspect-video border border-zinc-800 shadow-2xl flex items-center justify-center">
                     <video
-                        :src="previewingVideo.file_url"
+                        :src="resolveMediaUrl(previewingVideo.file_url)"
                         controls
                         autoplay
                         playsinline

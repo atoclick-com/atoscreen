@@ -4,6 +4,7 @@ import AdminLayout from '@/components/layout/AdminLayout.vue';
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import Modal from '@/components/common/Modal.vue';
+import { resolveMediaUrl } from '@/api/media';
 import { useScreensStore } from '@/stores/screens';
 import { useToastStore } from '@/stores/toast';
 import {
@@ -208,7 +209,7 @@ const handleCreateScreen = async () => {
                         <!-- Video thumbnail -->
                         <template v-if="screen.thumbnail_type === 'video'">
                             <video
-                                :src="screen.thumbnail_preview"
+                                :src="resolveMediaUrl(screen.thumbnail_preview)"
                                 preload="metadata"
                                 muted
                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"
@@ -223,7 +224,7 @@ const handleCreateScreen = async () => {
                         <!-- Image thumbnail -->
                         <img
                             v-else-if="screen.thumbnail_preview"
-                            :src="screen.thumbnail_preview"
+                            :src="resolveMediaUrl(screen.thumbnail_preview)"
                             :alt="screen.name"
                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />

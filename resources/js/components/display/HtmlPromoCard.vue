@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { resolveMediaUrl } from '@/api/media';
 import { Sparkles, Flame, Tag } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -95,7 +96,7 @@ const accentColor = computed(() => props.content.accent_color || '#f59e0b');
             >
                 <div class="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-white/10 group">
                     <img
-                        :src="content.image_url"
+                        :src="resolveMediaUrl(content.image_url)"
                         :alt="content.headline"
                         class="w-full h-full object-cover animate-ken-burns scale-105"
                     />
