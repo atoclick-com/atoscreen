@@ -1,8 +1,18 @@
 import axios from 'axios';
 
 // Use app base path injected by Laravel (e.g. '/v' when deployed at trotiluxe.ma/v)
-// Falls back to empty string for root deployments (localhost, etc.)
-const appBase = window.__APP_BASE__ || '';
+// or auto-detected from current window location.
+const getAppBase = () => {
+    if (typeof window !== 'undefined' && window.__APP_BASE__) {
+        return window.__APP_BASE__;
+    }
+    if (typeof window !== 'undefined' && (window.location.pathname === '/v' || window.location.pathname.startsWith('/v/'))) {
+        return '/v';
+    }
+    return '';
+};
+
+const appBase = getAppBase();
 
 const api = axios.create({
     baseURL: appBase + '/api/v1',

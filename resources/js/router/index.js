@@ -69,8 +69,18 @@ const routes = [
     },
 ];
 
+const getAppBase = () => {
+    if (typeof window !== 'undefined' && window.__APP_BASE__) {
+        return window.__APP_BASE__;
+    }
+    if (typeof window !== 'undefined' && (window.location.pathname === '/v' || window.location.pathname.startsWith('/v/'))) {
+        return '/v';
+    }
+    return '';
+};
+
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHistory(getAppBase()),
     routes,
 });
 

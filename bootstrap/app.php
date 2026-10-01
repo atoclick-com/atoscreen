@@ -13,22 +13,55 @@ if (!file_exists($envPath) && file_exists($baseDir . '/.env.example')) {
     @copy($baseDir . '/.env.example', $envPath);
 }
 
-// 1b. Fix subdirectory routing: read APP_URL path prefix from .env and
-//     override SCRIPT_NAME/PHP_SELF so Symfony strips the /v/ prefix correctly.
-//     Without this, Laravel sees the path as "/v/install" instead of "/install".
+// 1b. Fix subdirectory routing: detect if deployed in a subdirectory (e.g. /v)
+//     either from APP_URL, REQUEST_URI, or directory structure.
+$subDir = '';
 if (file_exists($envPath)) {
     $rawEnv = file_get_contents($envPath);
     if (preg_match('/^APP_URL\s*=\s*(.+)$/m', $rawEnv, $m)) {
-        $appUrl = trim($m[1]);
-        $urlPath = rtrim(parse_url($appUrl, PHP_URL_PATH) ?? '', '/');
-        if ($urlPath !== '' && $urlPath !== '/') {
-            // Set SCRIPT_NAME so Symfony's getBaseUrl() returns e.g. "/v"
-            // and getPathInfo() correctly strips it from "/v/install" → "/install"
-            $_SERVER['SCRIPT_NAME'] = $urlPath . '/index.php';
-            $_SERVER['PHP_SELF']    = $urlPath . '/index.php';
+        $configuredAppUrl = trim($m[1]);
+        $subDir = rtrim(parse_url($configuredAppUrl, PHP_URL_PATH) ?? '', '/');
+    }
+}
+
+// Fallback: detect from REQUEST_URI if APP_URL is not yet configured with /v
+if (empty($subDir) && isset($_SERVER['REQUEST_URI']) && preg_match('#^/([a-zA-Z0-9_\-]+)(/|$)#', $_SERVER['REQUEST_URI'], $rm)) {
+    if (basename($baseDir) === $rm[1]) {
+        $subDir = '/' . $rm[1];
+    }
+}
+
+// Also detect from filesystem directory if project is directly under a web root (e.g. public_html/v)
+if (empty($subDir) && basename($baseDir) === 'v') {
+    $subDir = '/v';
+}
+
+if (!empty($subDir) && $subDir !== '/') {
+    // Set SCRIPT_NAME and PHP_SELF so Symfony's getBaseUrl() returns e.g. "/v"
+    // and getPathInfo() correctly strips it from "/v/api/..." → "/api/..."
+    $_SERVER['SCRIPT_NAME'] = $subDir . '/index.php';
+    $_SERVER['PHP_SELF']    = $subDir . '/index.php';
+
+    // Auto-heal APP_URL in .env if missing or lacking the subdirectory prefix
+    if (file_exists($envPath)) {
+        $rawEnv = file_get_contents($envPath);
+        $serverHost = $_SERVER['HTTP_HOST'] ?? 'trotiluxe.ma';
+        $serverProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'https://';
+        $correctAppUrl = $serverProto . $serverHost . $subDir;
+
+        if (preg_match('/^APP_URL\s*=\s*(.+)$/m', $rawEnv, $m)) {
+            $existingAppUrl = trim($m[1]);
+            if (!str_ends_with($existingAppUrl, $subDir) || str_contains($existingAppUrl, 'localhost')) {
+                $rawEnv = preg_replace('/^APP_URL\s*=.*$/m', "APP_URL={$correctAppUrl}", $rawEnv);
+                @file_put_contents($envPath, $rawEnv);
+                putenv("APP_URL={$correctAppUrl}");
+                $_ENV['APP_URL'] = $correctAppUrl;
+                $_SERVER['APP_URL'] = $correctAppUrl;
+            }
         }
     }
 }
+
 
 
 // 2. Patch .env: APP_KEY, SESSION_DRIVER, CACHE_STORE — handles LF and CRLF
@@ -168,10 +201,21 @@ $app->booted(function () use ($sqlitePath) {
         return false;
     }, E_NOTICE | E_WARNING);
 
-    // Auto-migrate SQLite on first run if database is empty
+    // Auto-migrate on first run if database or essential tables are missing
     try {
-        if (file_exists($sqlitePath) && filesize($sqlitePath) === 0) {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('users') || !\Illuminate\Support\Facades\Schema::hasTable('personal_access_tokens')) {
             \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        }
+
+        // Ensure default administrator exists if users table is empty
+        if (\Illuminate\Support\Facades\Schema::hasTable('users') && \App\Models\User::count() === 0) {
+            \App\Models\User::create([
+                'name' => 'Admin',
+                'email' => 'admin@atofood.com',
+                'password' => 'password123',
+                'role' => 'admin',
+                'email_verified_at' => now(),
+            ]);
         }
     } catch (\Throwable $e) {
         // Migration will be handled via setup wizard or artisan

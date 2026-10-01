@@ -8,11 +8,15 @@
         $appSettings = \App\Models\AppSetting::instance();
         $appName = $appSettings->app_name ?: 'AtoFood Signage';
         $businessName = $appSettings->business_name ?: 'Digital Display Management';
+        $detectedBase = rtrim(request()->getBasePath() ?: (parse_url(config('app.url'), PHP_URL_PATH) ?? ''), '/');
+        if (empty($detectedBase) && (request()->is('v') || request()->is('v/*') || str_starts_with($_SERVER['REQUEST_URI'] ?? '', '/v'))) {
+            $detectedBase = '/v';
+        }
     @endphp
     <title>{{ $appName }} | {{ $businessName }}</title>
     <script>
         // App base path for subdirectory deployments (e.g. '/v' when at trotiluxe.ma/v)
-        window.__APP_BASE__ = @json(rtrim(parse_url(config('app.url'), PHP_URL_PATH) ?? '', '/'));
+        window.__APP_BASE__ = @json($detectedBase);
         window.__APP_SETTINGS__ = {
             appName: @json($appName),
             businessName: @json($businessName)

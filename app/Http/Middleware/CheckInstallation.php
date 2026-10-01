@@ -15,6 +15,19 @@ class CheckInstallation
     {
         $isInstalled = file_exists(storage_path('installed'));
 
+        // If lockfile does not exist yet, auto-detect if the database is already migrated and has an admin user
+        if (!$isInstalled) {
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('users') && \App\Models\User::exists()) {
+                    $isInstalled = true;
+                    @file_put_contents(storage_path('installed'), json_encode([
+                        'installed_at' => now()->toIso8601String(),
+                        'auto_detected' => true,
+                    ], JSON_PRETTY_PRINT));
+                }
+            } catch (\Throwable $e) {}
+        }
+
         // Always allow system health checks, static assets, and favicon
         if ($request->is('up', 'build/*', 'storage/*', 'assets/*', 'favicon.ico')) {
             return $next($request);
@@ -22,8 +35,8 @@ class CheckInstallation
 
         // 1. If application is NOT yet installed:
         if (!$isInstalled) {
-            // Allow installer routes, wizard routes, display screens, and installation API calls
-            if ($request->is('install*', 'wizard*', 'v/*', 'display/*', 'api/installer*', 'api/v1/wizard*', 'api/v1/display*')) {
+            // Allow installer routes, wizard routes, display screens, login page, and auth API calls
+            if ($request->is('install*', 'wizard*', 'v/*', 'display/*', 'login*', 'api/v1/auth*', 'api/installer*', 'api/v1/wizard*', 'api/v1/display*')) {
                 return $next($request);
             }
 
