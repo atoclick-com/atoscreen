@@ -15,6 +15,9 @@ import {
     Heart,
     Eye,
     Check,
+    Film,
+    UploadCloud,
+    Trash2,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -122,8 +125,35 @@ const applyPreset = (preset) => {
     extractInstagramInfo(preset.url);
 };
 
+const videoFile = ref(null);
+const videoFilePreview = ref('');
+const fileInputRef = ref(null);
+
+const onFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    videoFile.value = file;
+    form.media_type = 'reel';
+    if (videoFilePreview.value) {
+        URL.revokeObjectURL(videoFilePreview.value);
+    }
+    videoFilePreview.value = URL.createObjectURL(file);
+};
+
+const removeSelectedFile = () => {
+    videoFile.value = null;
+    if (videoFilePreview.value) {
+        URL.revokeObjectURL(videoFilePreview.value);
+    }
+    videoFilePreview.value = '';
+    if (fileInputRef.value) {
+        fileInputRef.value.value = '';
+    }
+};
+
 watch(() => props.show, (newVal) => {
     if (newVal) {
+        removeSelectedFile();
         if (props.slide && props.slide.type === 'instagram') {
             form.title = props.slide.title || '';
             form.duration = props.slide.duration_override || 15;
@@ -141,13 +171,13 @@ watch(() => props.show, (newVal) => {
             form.show_qr_code = c.show_qr_code !== false;
         } else {
             // New slide defaults: ready for user's URL
-            form.title = 'Instagram Post';
-            form.url = 'https://www.instagram.com/p/Dd4bjHcjYk3/';
+            form.title = 'Instagram Reel';
+            form.url = 'https://www.instagram.com/reel/trotiluxe/';
             form.author = 'trotiluxe';
             form.author_avatar = '';
             form.media_type = 'reel';
             form.media_url = '';
-            form.caption = 'Découvrez tous nos modèles disponibles en magasin !';
+            form.caption = 'Découvrez nos nouveautés disponibles en magasin !';
             form.likes_count = '';
             form.duration = 15;
             form.audio_enabled = true;
@@ -161,31 +191,59 @@ watch(() => props.show, (newVal) => {
 const handleSubmit = async () => {
     saving.value = true;
     try {
-        const payload = {
-            type: 'instagram',
-            title: form.title || (form.author ? `Instagram @${form.author}` : 'Instagram Feature'),
-            duration_override: form.duration,
-            audio_enabled: form.audio_enabled,
-            fit_mode: form.fit_mode,
-            file_url: form.media_url || null,
-            content: {
-                url: form.url,
-                author: form.author || 'Instagram',
-                author_avatar: form.author_avatar,
-                media_type: form.media_type,
-                media_url: form.media_url || null,
-                caption: form.caption,
-                likes_count: form.likes_count,
-                show_qr_code: form.show_qr_code,
-            },
-        };
+        if (videoFile.value) {
+            const formData = new FormData();
+            formData.append('type', 'instagram');
+            formData.append('title', form.title || (form.author ? `Instagram @${form.author}` : 'Instagram Reel'));
+            formData.append('duration_override', String(form.duration || 15));
+            formData.append('audio_enabled', form.audio_enabled ? '1' : '0');
+            formData.append('fit_mode', form.fit_mode || 'ambient_blur');
+            formData.append('file', videoFile.value);
+            formData.append('content[url]', form.url || '');
+            formData.append('content[author]', form.author || 'Instagram');
+            formData.append('content[author_avatar]', form.author_avatar || '');
+            formData.append('content[media_type]', 'reel');
+            formData.append('content[is_video]', '1');
+            formData.append('content[caption]', form.caption || '');
+            formData.append('content[likes_count]', form.likes_count || '');
+            formData.append('content[show_qr_code]', form.show_qr_code ? '1' : '0');
 
-        if (isEditing.value) {
-            await screensStore.updateSlide(props.slide.id, payload);
-            toastStore.success('Instagram Slide Updated', 'Changes synced to TV.');
+            if (isEditing.value) {
+                await screensStore.updateSlide(props.slide.id, formData);
+                toastStore.success('Instagram Reel Updated', 'Video uploaded and synced to TV.');
+            } else {
+                await screensStore.uploadSlide(props.screenId, formData);
+                toastStore.success('Instagram Reel Added', 'Video uploaded and ready to broadcast on TV.');
+            }
         } else {
-            await screensStore.uploadSlide(props.screenId, payload);
-            toastStore.success('Instagram Slide Added', 'Post will now broadcast live on TV.');
+            const isReel = form.media_type === 'reel' || !!(form.media_url && (form.media_url.includes('.mp4') || form.media_url.includes('.webm') || form.media_url.includes('.mov')));
+            const payload = {
+                type: 'instagram',
+                title: form.title || (form.author ? `Instagram @${form.author}` : 'Instagram Reel'),
+                duration_override: form.duration,
+                audio_enabled: form.audio_enabled,
+                fit_mode: form.fit_mode,
+                file_url: form.media_url || null,
+                content: {
+                    url: form.url,
+                    author: form.author || 'Instagram',
+                    author_avatar: form.author_avatar,
+                    media_type: form.media_type,
+                    media_url: form.media_url || null,
+                    is_video: isReel,
+                    caption: form.caption,
+                    likes_count: form.likes_count,
+                    show_qr_code: form.show_qr_code,
+                },
+            };
+
+            if (isEditing.value) {
+                await screensStore.updateSlide(props.slide.id, payload);
+                toastStore.success('Instagram Slide Updated', 'Changes synced to TV.');
+            } else {
+                await screensStore.uploadSlide(props.screenId, payload);
+                toastStore.success('Instagram Slide Added', 'Post will now broadcast live on TV.');
+            }
         }
 
         emit('saved');
@@ -288,6 +346,60 @@ const handleSubmit = async () => {
                     />
                 </div>
 
+                <!-- Direct Reel Video Upload (Recommended for TV Autoplay & Completion) -->
+                <div class="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <Film class="w-4 h-4 text-amber-400" />
+                            <span>Upload Reel Video File (MP4)</span>
+                        </label>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                            100% Autostart & End-Detection
+                        </span>
+                    </div>
+
+                    <!-- Selected file badge -->
+                    <div v-if="videoFile" class="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-emerald-500/40">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <Film class="w-4 h-4 text-emerald-400 shrink-0" />
+                            <div class="min-w-0">
+                                <p class="text-xs font-medium text-zinc-200 truncate">{{ videoFile.name }}</p>
+                                <p class="text-[10px] text-zinc-400">{{ (videoFile.size / 1024 / 1024).toFixed(2) }} MB &bull; Autostarts on TV</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="removeSelectedFile"
+                            class="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                            title="Remove file"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <!-- File dropzone / upload button -->
+                    <div v-else>
+                        <input
+                            ref="fileInputRef"
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime"
+                            class="hidden"
+                            @change="onFileSelect"
+                        />
+                        <button
+                            type="button"
+                            @click="fileInputRef?.click()"
+                            class="w-full py-2.5 px-4 rounded-xl border border-dashed border-zinc-700 hover:border-amber-500/60 bg-zinc-900/50 hover:bg-zinc-900 text-xs text-zinc-300 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                            <UploadCloud class="w-4 h-4 text-amber-400" />
+                            <span>Select or drop Reel MP4 video file</span>
+                        </button>
+                        <p class="text-[11px] text-zinc-500 mt-1">
+                            💡 For guaranteed TV autostart and play-to-end, upload the reel MP4 directly.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Custom Direct Media (Optional) -->
                 <div>
                     <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
@@ -310,7 +422,14 @@ const handleSubmit = async () => {
                             <Clock class="w-3.5 h-3.5 text-amber-400" />
                             <span>Duration</span>
                         </span>
-                        <div class="flex items-center gap-2">
+                        <div v-if="form.media_type === 'reel' || videoFile || form.media_url" class="space-y-1">
+                            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-medium">
+                                <Film class="w-3 h-3 shrink-0" />
+                                <span>Until Video Ends</span>
+                            </div>
+                            <p class="text-[10px] text-zinc-500 leading-tight">No timer. Slide advances when video completes.</p>
+                        </div>
+                        <div v-else class="flex items-center gap-2">
                             <input
                                 v-model.number="form.duration"
                                 type="number"
@@ -356,11 +475,38 @@ const handleSubmit = async () => {
                         <span>Live Instagram Stream Preview</span>
                     </span>
 
-                    <!-- TV Frame Simulation (16:9) with Live Embed -->
+                    <!-- TV Frame Simulation (16:9) with Live Embed / Video Preview -->
                     <div class="aspect-[10/11] w-full rounded-2xl overflow-hidden bg-black border border-zinc-800 relative shadow-2xl flex items-center justify-center p-2 select-none">
+                        <!-- Direct Video Preview if file is selected -->
+                        <video
+                            v-if="videoFilePreview"
+                            :src="videoFilePreview"
+                            controls
+                            autoplay
+                            muted
+                            playsinline
+                            class="w-full h-full object-contain bg-black rounded-xl"
+                        />
+                        <!-- Direct media URL if video -->
+                        <video
+                            v-else-if="form.media_url && (form.media_url.includes('.mp4') || form.media_url.includes('.webm') || form.media_url.includes('.mov'))"
+                            :src="form.media_url"
+                            controls
+                            autoplay
+                            muted
+                            playsinline
+                            class="w-full h-full object-contain bg-black rounded-xl"
+                        />
+                        <!-- Direct media URL if image -->
+                        <img
+                            v-else-if="form.media_url"
+                            :src="form.media_url"
+                            class="w-full h-full object-contain bg-black rounded-xl"
+                            alt="Media Preview"
+                        />
                         <!-- If official embed preview exists, render actual Instagram live widget! -->
                         <iframe
-                            v-if="embedPreviewUrl"
+                            v-else-if="embedPreviewUrl"
                             :src="embedPreviewUrl"
                             class="w-full h-full border-0 rounded-xl bg-black"
                             scrolling="no"
@@ -369,7 +515,7 @@ const handleSubmit = async () => {
                         <!-- Fallback illustration -->
                         <div v-else class="text-center p-6 space-y-2 text-zinc-500">
                             <Instagram class="w-10 h-10 mx-auto text-zinc-700 animate-pulse" />
-                            <p class="text-xs">Paste an Instagram link to see live interactive preview</p>
+                            <p class="text-xs">Paste an Instagram link or upload a Reel video to preview</p>
                         </div>
                     </div>
                 </div>

@@ -49,15 +49,35 @@ class SlideController extends Controller
             $ext = strtolower($file->getClientOriginalExtension());
             $mime = $file->getMimeType() ?: $file->getClientMimeType() ?: '';
             $isVideo = str_starts_with($mime, 'video/') || in_array($ext, ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts', 'ogv']);
-            $type = $isVideo ? 'video' : $validated['type'];
-            $dir = $type === 'video' ? 'videos' : 'images';
-            $filePath = $file->store("screens/{$screen->id}/{$dir}", 'public');
-            $validated['type'] = $type;
+            
+            if ($validated['type'] === 'instagram') {
+                $dir = 'instagram';
+                $filePath = $file->store("screens/{$screen->id}/{$dir}", 'public');
+                $publicUrl = url("storage/{$filePath}");
+                if (!isset($validated['content']) || !is_array($validated['content'])) {
+                    $validated['content'] = [];
+                }
+                $validated['content']['media_url'] = $publicUrl;
+                $validated['content']['is_video'] = true;
+                $validated['content']['media_type'] = 'reel';
+            } else {
+                $type = $isVideo ? 'video' : $validated['type'];
+                $dir = $type === 'video' ? 'videos' : 'images';
+                $filePath = $file->store("screens/{$screen->id}/{$dir}", 'public');
+                $validated['type'] = $type;
+            }
         } elseif (!empty($validated['file_url'])) {
             $filePath = trim($validated['file_url']);
+            if ($validated['type'] === 'instagram') {
+                if (!isset($validated['content']) || !is_array($validated['content'])) {
+                    $validated['content'] = [];
+                }
+                $validated['content']['media_url'] = $filePath;
+                $validated['content']['is_video'] = true;
+            }
         }
 
-        if ($validated['type'] === 'instagram' && !empty($validated['content']['url'])) {
+        if ($validated['type'] === 'instagram' && empty($filePath) && !empty($validated['content']['url'])) {
             $downloadedPath = $this->processInstagramSlide($validated['content'], $screen);
             if ($downloadedPath) {
                 $filePath = $downloadedPath;
@@ -180,17 +200,36 @@ class SlideController extends Controller
             $ext = strtolower($file->getClientOriginalExtension());
             $mime = $file->getMimeType() ?: $file->getClientMimeType() ?: '';
             $isVideo = str_starts_with($mime, 'video/') || in_array($ext, ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts', 'ogv']);
-            $type = $isVideo ? 'video' : ($validated['type'] ?? $slide->type);
-            $dir = $type === 'video' ? 'videos' : 'images';
-            $validated['type'] = $type;
-            $validated['file_path'] = $file->store("screens/{$slide->screen_id}/{$dir}", 'public');
+            
+            if (($validated['type'] ?? $slide->type) === 'instagram') {
+                $dir = 'instagram';
+                $filePath = $file->store("screens/{$slide->screen_id}/{$dir}", 'public');
+                $publicUrl = url("storage/{$filePath}");
+                $content = $validated['content'] ?? $slide->content ?? [];
+                $content['media_url'] = $publicUrl;
+                $content['is_video'] = true;
+                $content['media_type'] = 'reel';
+                $validated['content'] = $content;
+                $validated['file_path'] = $filePath;
+            } else {
+                $type = $isVideo ? 'video' : ($validated['type'] ?? $slide->type);
+                $dir = $type === 'video' ? 'videos' : 'images';
+                $validated['type'] = $type;
+                $validated['file_path'] = $file->store("screens/{$slide->screen_id}/{$dir}", 'public');
+            }
         } elseif (!empty($validated['file_url'])) {
             $validated['file_path'] = trim($validated['file_url']);
+            if (($validated['type'] ?? $slide->type) === 'instagram') {
+                $content = $validated['content'] ?? $slide->content ?? [];
+                $content['media_url'] = $validated['file_path'];
+                $content['is_video'] = true;
+                $validated['content'] = $content;
+            }
         }
 
         $type = $validated['type'] ?? $slide->type;
         $screen = $slide->screen ?: Screen::find($slide->screen_id);
-        if ($type === 'instagram' && !empty($validated['content']['url']) && $screen) {
+        if ($type === 'instagram' && empty($validated['file_path']) && !empty($validated['content']['url']) && $screen) {
             $downloadedPath = $this->processInstagramSlide($validated['content'], $screen);
             if ($downloadedPath) {
                 $validated['file_path'] = $downloadedPath;
@@ -347,21 +386,24 @@ class SlideController extends Controller
             return $relativeStoragePath;
         }
 
-        // Try downloading with yt-dlp
-        try {
-            $escapedUrl = escapeshellarg($url);
-            $escapedOut = escapeshellarg($localFilePath);
-            $cmd = "python -m yt_dlp {$escapedUrl} -o {$escapedOut} --no-playlist --format \"bestvideo+bestaudio/best\" --merge-output-format mp4 2>&1";
-            @exec($cmd, $output, $returnCode);
+        // Try downloading with yt-dlp across common binary paths
+        $binaries = ['yt-dlp', '/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp', 'python3 -m yt_dlp', 'python -m yt_dlp'];
+        foreach ($binaries as $bin) {
+            try {
+                $escapedUrl = escapeshellarg($url);
+                $escapedOut = escapeshellarg($localFilePath);
+                $cmd = "{$bin} {$escapedUrl} -o {$escapedOut} --no-playlist --format \"bestvideo+bestaudio/best\" --merge-output-format mp4 2>&1";
+                @exec($cmd, $output, $returnCode);
 
-            if (file_exists($localFilePath) && filesize($localFilePath) > 50000) {
-                $content['media_url'] = $publicUrl;
-                $content['is_video'] = true;
-                $content['media_type'] = 'reel';
-                return $relativeStoragePath;
+                if (file_exists($localFilePath) && filesize($localFilePath) > 50000) {
+                    $content['media_url'] = $publicUrl;
+                    $content['is_video'] = true;
+                    $content['media_type'] = 'reel';
+                    return $relativeStoragePath;
+                }
+            } catch (\Throwable $e) {
+                // Try next
             }
-        } catch (\Throwable $e) {
-            // Silently fallback if yt-dlp is unavailable
         }
 
         return null;

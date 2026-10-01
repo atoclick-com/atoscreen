@@ -300,9 +300,12 @@ const isVideoSlide = (slide) => {
     if (!slide) return false;
     if (slide.type === 'video') return true;
     if (slide.type === 'instagram') {
-        if (slide.content?.is_video === true) return true;
-        const url = (slide.content?.media_url || slide.file_url || '').toLowerCase();
-        return url.includes('.mp4') || url.includes('.webm') || url.includes('.mov') || slide.content?.media_type === 'reel';
+        const mediaUrl = slide.file_url || slide.content?.media_url;
+        if (mediaUrl) {
+            const lower = mediaUrl.toLowerCase();
+            return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || slide.content?.is_video === true || slide.content?.media_type === 'reel';
+        }
+        return false;
     }
     return false;
 };
@@ -528,10 +531,13 @@ onUnmounted(() => {
                         v-else-if="currentSlide.type === 'instagram'"
                         :content="currentSlide.content"
                         :media-url="resolveMediaUrl(currentSlide.file_url || currentSlide.content?.media_url)"
+                        :loop="slides.length === 1"
                         :audio-enabled="isAudioActiveForSlide && isUserUnmuted"
+                        :volume="audioVolumeLevel"
                         :accent-color="settings?.accent_color || '#f59e0b'"
                         :fit-mode="currentFitMode"
                         @ended="nextSlide"
+                        @error="nextSlide"
                     />
 
                     <!-- HTML Promo Card Slide -->

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, watch, nextTick } from 'vue';
 import QRCode from 'qrcode';
 import { resolveMediaUrl } from '@/api/media';
 import { Heart, MessageCircle, Instagram, CheckCircle2, QrCode, ExternalLink, Play } from 'lucide-vue-next';
@@ -12,6 +12,14 @@ const props = defineProps({
     mediaUrl: {
         type: String,
         default: null,
+    },
+    loop: {
+        type: Boolean,
+        default: false,
+    },
+    volume: {
+        type: Number,
+        default: 0.8,
     },
     audioEnabled: {
         type: Boolean,
@@ -31,7 +39,7 @@ const isFullScreen = computed(() => {
     return props.fitMode === 'cover' || props.fitMode === 'contain' || props.fitMode === 'stretch';
 });
 
-const emit = defineEmits(['ended']);
+const emit = defineEmits(['ended', 'error']);
 
 const qrDataUrl = ref('');
 const videoEl = ref(null);
@@ -58,46 +66,58 @@ const mediaSrc = computed(() => {
 });
 
 const isVideo = computed(() => {
-    if (props.content?.is_video === true) return true;
     if (!mediaSrc.value) return false;
+    if (props.content?.is_video === true) return true;
     const url = mediaSrc.value.toLowerCase();
     return url.includes('.mp4') || url.includes('.webm') || url.includes('.mov') || url.includes('/videos/') || props.content?.media_format === 'video' || props.content?.media_type === 'reel';
 });
 
 const hasDirectMedia = computed(() => {
-    if (isVideo.value) return true;
     if (!mediaSrc.value) return false;
+    if (isVideo.value) return true;
     const url = mediaSrc.value.toLowerCase();
     return url.includes('.mp4') || url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png') || url.includes('.webp') || url.includes('unsplash') || url.includes('/storage/');
 });
 
 const onVideoEnded = () => {
-    console.log('[InstagramCard] Video playback ended. Notifying parent to advance slide.');
+    if (props.loop) {
+        const el = videoEl.value;
+        if (el) {
+            el.currentTime = 0;
+            ensureAutoplay();
+        }
+        return;
+    }
+    console.log('[InstagramCard] Reel video playback completed. Moving to next slide.');
     emit('ended');
 };
 
 const onVideoError = (err) => {
-    console.warn('[InstagramCard] Video playback error:', err);
-    emit('ended');
+    console.warn('[InstagramCard] Video playback error encountered:', err);
+    // Safety fallback: wait 5 seconds before advancing, never skip immediately!
+    setTimeout(() => {
+        emit('ended');
+    }, 5000);
 };
 
 const ensureAutoplay = () => {
-    if (videoEl.value && isVideo.value) {
-        videoEl.value.currentTime = 0;
-        const playPromise = videoEl.value.play();
-        if (playPromise !== undefined) {
-            playPromise.then(() => {
+    const el = videoEl.value;
+    if (!el || !isVideo.value) return;
+
+    el.volume = Math.min(1, Math.max(0, props.volume !== undefined ? props.volume : 0.8));
+    el.muted = !props.audioEnabled;
+
+    const playPromise = el.play();
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            isPlaying.value = true;
+        }).catch((err) => {
+            console.warn('[InstagramCard] Unmuted autoplay restricted by browser policy, muting to start video immediately:', err);
+            el.muted = true;
+            el.play().then(() => {
                 isPlaying.value = true;
-            }).catch((err) => {
-                console.warn('[InstagramCard] Autoplay with audio was restricted, muting to guarantee autoplay:', err);
-                if (videoEl.value) {
-                    videoEl.value.muted = true;
-                    videoEl.value.play().then(() => {
-                        isPlaying.value = true;
-                    }).catch(e => console.warn('[InstagramCard] Muted autoplay also failed:', e));
-                }
-            });
-        }
+            }).catch(e => console.warn('[InstagramCard] Muted autoplay retry failed:', e));
+        });
     }
 };
 
@@ -120,7 +140,11 @@ const generateQr = async () => {
 
 onMounted(() => {
     generateQr();
-    ensureAutoplay();
+    nextTick(() => {
+        ensureAutoplay();
+        setTimeout(ensureAutoplay, 300);
+        setTimeout(ensureAutoplay, 800);
+    });
 });
 
 watch(() => props.audioEnabled, (newVal) => {
@@ -129,8 +153,17 @@ watch(() => props.audioEnabled, (newVal) => {
     }
 });
 
+watch(() => props.volume, (newVol) => {
+    if (videoEl.value) {
+        videoEl.value.volume = Math.min(1, Math.max(0, newVol));
+    }
+});
+
 watch(() => mediaSrc.value, () => {
-    ensureAutoplay();
+    nextTick(() => {
+        ensureAutoplay();
+        setTimeout(ensureAutoplay, 300);
+    });
 });
 
 watch(() => props.content?.url, () => {
@@ -178,12 +211,16 @@ watch(() => props.content?.url, () => {
                 :muted="!audioEnabled"
                 playsinline
                 webkit-playsinline
+                x5-playsinline
+                preload="auto"
                 class="transition-all duration-300"
                 :class="[
                     fitMode === 'cover' ? 'w-full h-full object-cover' : '',
                     fitMode === 'contain' ? 'w-full h-full object-contain' : '',
                     fitMode === 'stretch' ? 'w-full h-full object-fill' : '',
                 ]"
+                @loadedmetadata="ensureAutoplay"
+                @canplay="ensureAutoplay"
                 @ended="onVideoEnded"
                 @error="onVideoError"
             />
@@ -241,7 +278,11 @@ watch(() => props.content?.url, () => {
                     :muted="!audioEnabled"
                     playsinline
                     webkit-playsinline
+                    x5-playsinline
+                    preload="auto"
                     class="w-full h-full object-cover"
+                    @loadedmetadata="ensureAutoplay"
+                    @canplay="ensureAutoplay"
                     @ended="onVideoEnded"
                     @error="onVideoError"
                 />
