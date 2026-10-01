@@ -228,6 +228,7 @@ const handleSaveAll = async () => {
         };
 
         const updated = await screensStore.saveScreenSettings(screenId.value, screenPayload, settingsPayload);
+        initForms();
         const qrUrl = updated?.short_url ? `https://${updated.short_url}` : (updated?.public_url || screen.value?.public_url);
         generateQrCode(qrUrl);
     } catch (err) {

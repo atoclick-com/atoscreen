@@ -83,6 +83,8 @@ class SlideController extends Controller
             'day_of_week_schedule' => $validated['day_of_week_schedule'] ?? null,
         ]);
 
+        $screen->touch();
+
         return response()->json([
             'message' => 'Slide created successfully',
             'slide' => $slide,
@@ -141,6 +143,8 @@ class SlideController extends Controller
             $createdSlides[] = $slide;
         }
 
+        $screen->touch();
+
         return response()->json([
             'message' => count($createdSlides) . ' media files uploaded successfully',
             'slides' => $createdSlides,
@@ -194,6 +198,7 @@ class SlideController extends Controller
         }
 
         $slide->update($validated);
+        $slide->screen?->touch();
 
         return response()->json([
             'message' => 'Slide updated successfully',
@@ -206,6 +211,7 @@ class SlideController extends Controller
         $slide = Slide::findOrFail($id);
         $slide->active = !$slide->active;
         $slide->save();
+        $slide->screen?->touch();
 
         return response()->json([
             'message' => 'Slide ' . ($slide->active ? 'activated' : 'paused'),
@@ -229,6 +235,8 @@ class SlideController extends Controller
                     ->update(['display_order' => $order + 1]);
             }
         });
+
+        $screen->touch();
 
         $updatedSlides = $screen->slides()->orderBy('display_order', 'asc')->get();
 
@@ -273,6 +281,7 @@ class SlideController extends Controller
     public function destroy(string $id): JsonResponse
     {
         $slide = Slide::findOrFail($id);
+        $screen = $slide->screen;
 
         // Delete associated file if exists on disk
         if ($slide->file_path && !str_starts_with($slide->file_path, 'http')) {
@@ -280,6 +289,7 @@ class SlideController extends Controller
         }
 
         $slide->delete();
+        $screen?->touch();
 
         return response()->json([
             'message' => 'Slide deleted successfully',

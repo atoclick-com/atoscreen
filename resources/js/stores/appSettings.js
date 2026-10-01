@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/api/client';
 import { useToastStore } from './toast';
+import { notifyScreenUpdate } from '@/api/realtimeSync';
 
 export const useAppSettingsStore = defineStore('appSettings', {
     state: () => ({
@@ -84,6 +85,7 @@ export const useAppSettingsStore = defineStore('appSettings', {
                     document.title = app;
                 }
 
+                notifyScreenUpdate(null);
                 toast.success('Settings Saved', 'App information, title, and defaults have been updated.');
                 return response.data;
             } catch (err) {
@@ -102,6 +104,7 @@ export const useAppSettingsStore = defineStore('appSettings', {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 this.settings = response.data.settings;
+                notifyScreenUpdate(null);
                 toast.success('Logo Uploaded', 'Master brand logo updated.');
                 return response.data;
             } catch (err) {
@@ -116,6 +119,7 @@ export const useAppSettingsStore = defineStore('appSettings', {
             try {
                 const response = await api.delete('/app-settings/logo');
                 this.settings = response.data.settings;
+                notifyScreenUpdate(null);
                 toast.success('Logo Removed', 'Master brand logo removed.');
                 return response.data;
             } catch (err) {

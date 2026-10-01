@@ -60,6 +60,8 @@ php artisan config:clear
 php artisan route:clear
 php artisan view:clear
 php artisan cache:clear
+php artisan view:cache
+chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 
 echo ""
 echo "============================================"

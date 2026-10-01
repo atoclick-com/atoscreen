@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import api from '@/api/client';
+import { subscribeToScreenUpdates } from '@/api/realtimeSync';
 import KenBurnsImage from '@/components/display/KenBurnsImage.vue';
 import VideoPlayer from '@/components/display/VideoPlayer.vue';
 import HtmlPromoCard from '@/components/display/HtmlPromoCard.vue';
@@ -27,12 +28,13 @@ const playlistChecksum = ref(null);
 const pendingPlaylist = ref(null);
 const isUserUnmuted = ref(false);
 
-// Timers
+// Timers & listeners
 let slideTimer = null;
 let pollTimer = null;
 let pingTimer = null;
 let mouseTimer = null;
 let businessHoursTimer = null;
+let cleanupSync = null;
 const isMouseActive = ref(true);
 const isOutsideOperatingHours = ref(false);
 
@@ -138,7 +140,7 @@ watch(
 );
 
 // Fetch playlist from API
-const fetchPlaylist = async (isInitial = false) => {
+const fetchPlaylist = async (isInitial = false, forceImmediate = false) => {
     try {
         const response = await api.get(`/display/${uuid.value}/playlist`);
         const data = response.data;
@@ -166,22 +168,31 @@ const fetchPlaylist = async (isInitial = false) => {
                 startSlideTimer();
             }
         } else {
-            // Background polling: check if checksum changed
-            if (data.checksum !== playlistChecksum.value) {
-                console.log('Playlist or settings update detected, applying changes.');
+            // Apply immediately if checksum changed or forced by real-time sync
+            if (data.checksum !== playlistChecksum.value || forceImmediate) {
+                console.log('[DisplayView] Playlist or settings update detected, applying changes immediately.');
                 screen.value = data.screen;
                 settings.value = data.settings;
                 playlistChecksum.value = data.checksum;
                 checkOperatingHours();
 
-                // If currently no slides, or single slide, or slide count changed, apply immediately
-                if (!slides.value.length || slides.value.length === 1 || data.slides.length !== slides.value.length) {
-                    slides.value = data.slides;
-                    currentSlideIndex.value = 0;
+                // Preserve current slide position if valid, else clamp
+                const currentPlayingId = currentSlide.value?.id;
+                slides.value = data.slides;
+                pendingPlaylist.value = null;
+
+                if (slides.value.length > 0) {
+                    const foundIndex = slides.value.findIndex(s => s.id === currentPlayingId);
+                    if (foundIndex !== -1) {
+                        currentSlideIndex.value = foundIndex;
+                    } else if (currentSlideIndex.value >= slides.value.length) {
+                        currentSlideIndex.value = 0;
+                    }
                     preloadNextSlide();
                     startSlideTimer();
                 } else {
-                    pendingPlaylist.value = data;
+                    currentSlideIndex.value = 0;
+                    if (slideTimer) clearTimeout(slideTimer);
                 }
 
                 try {
@@ -318,7 +329,7 @@ const startSlideTimer = () => {
     }, durationSeconds * 1000);
 };
 
-// Heartbeat Ping
+// Heartbeat Ping (runs every 3.5s for fast TV sync)
 const sendHeartbeat = async () => {
     if (!uuid.value) return;
     try {
@@ -333,7 +344,8 @@ const sendHeartbeat = async () => {
             const serverTime = new Date(response.data.screen_updated_at).getTime();
             const localTime = new Date(screen.value.updated_at).getTime();
             if (serverTime > localTime) {
-                fetchPlaylist(false);
+                console.log('[DisplayView] Server modification detected via ping heartbeat, fetching latest playlist.');
+                fetchPlaylist(false, true);
             }
         }
     } catch (e) {
@@ -384,18 +396,31 @@ const handleMouseMove = () => {
 onMounted(async () => {
     await fetchPlaylist(true);
 
-    // Setup polling (default 60s, supports fast sync e.g. 15s)
+    // Setup background fallback polling
     const interval = (settings.value?.auto_refresh_interval || 60) * 1000;
     pollTimer = setInterval(() => {
         fetchPlaylist(false);
     }, Math.max(10000, interval));
 
-    // Setup Heartbeat ping every 30s
+    // Setup fast Heartbeat ping every 3.5 seconds (detects updates on external TV screens in real time)
     sendHeartbeat();
-    pingTimer = setInterval(sendHeartbeat, 30000);
+    pingTimer = setInterval(sendHeartbeat, 3500);
 
     // Operating hours check every minute
     businessHoursTimer = setInterval(checkOperatingHours, 60000);
+
+    // Real-time zero-latency broadcast sync for open tabs/windows
+    cleanupSync = subscribeToScreenUpdates((payload) => {
+        const targetId = payload?.screenId;
+        const myId = String(screen.value?.id || '');
+        const myCode = String(screen.value?.short_code || '');
+        const myUuid = String(uuid.value || '');
+
+        if (!targetId || targetId === myId || targetId === myCode || targetId === myUuid) {
+            console.log('[DisplayView] Instant real-time update triggered by admin action!');
+            fetchPlaylist(false, true);
+        }
+    });
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mousemove', handleMouseMove);
@@ -403,6 +428,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    if (cleanupSync) cleanupSync();
     if (slideTimer) clearTimeout(slideTimer);
     if (pollTimer) clearInterval(pollTimer);
     if (pingTimer) clearInterval(pingTimer);

@@ -98,6 +98,8 @@ class ScreenSettingController extends Controller
             'logo_overlay_enabled' => true,
         ]);
 
+        $screen->touch();
+
         return response()->json([
             'message' => 'Logo uploaded and enabled',
             'settings' => $settings->fresh(),
@@ -118,6 +120,7 @@ class ScreenSettingController extends Controller
                 'logo_path' => null,
                 'logo_overlay_enabled' => false,
             ]);
+            $screen->touch();
         }
 
         return response()->json([

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import api from '@/api/client';
 import { useToastStore } from './toast';
+import { notifyScreenUpdate } from '@/api/realtimeSync';
 
 export const useScreensStore = defineStore('screens', {
     state: () => ({
@@ -107,6 +108,7 @@ export const useScreensStore = defineStore('screens', {
             try {
                 const response = await api.post(`/screens/${id}/regenerate-url`);
                 this.currentScreen = response.data.screen;
+                notifyScreenUpdate(id);
                 useToastStore().success('URL Regenerated', 'Old TV link invalidated. New link is ready.');
                 return response.data;
             } catch (err) {
@@ -123,6 +125,7 @@ export const useScreensStore = defineStore('screens', {
             try {
                 const response = await api.post(`/screens/${id}/reset`);
                 this.currentScreen = response.data.screen;
+                notifyScreenUpdate(id);
                 useToastStore().success('Screen Reset', 'All slides cleared and defaults restored.');
                 return response.data.screen;
             } catch (err) {
@@ -144,6 +147,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.slides.push(response.data.slide);
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Slide Added', response.data.message);
                 return response.data.slide;
             } catch (err) {
@@ -164,6 +168,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.slides.push(...response.data.slides);
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Batch Uploaded', response.data.message);
                 return response.data.slides;
             } catch (err) {
@@ -194,6 +199,8 @@ export const useScreensStore = defineStore('screens', {
                         this.currentScreen.slides[idx] = response.data.slide;
                     }
                 }
+                const targetScreenId = this.currentScreen?.id || response.data?.slide?.screen_id;
+                notifyScreenUpdate(targetScreenId);
                 useToastStore().success('Saved', 'Slide updated.');
                 return response.data.slide;
             } catch (err) {
@@ -214,9 +221,11 @@ export const useScreensStore = defineStore('screens', {
                         slide.active = response.data.slide.active;
                     }
                 }
+                const targetScreenId = this.currentScreen?.id || response.data?.slide?.screen_id;
+                notifyScreenUpdate(targetScreenId);
                 useToastStore().info(
                     response.data.slide.active ? 'Slide Activated' : 'Slide Paused',
-                    'Display playlist will update within 60s'
+                    'Display playlist updated instantly.'
                 );
                 return response.data.slide;
             } catch (err) {
@@ -231,6 +240,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.slides = response.data.slides;
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Reordered', 'Playlist order updated.');
             } catch (err) {
                 useToastStore().error('Reorder Failed', err.response?.data?.message || 'Error');
@@ -247,6 +257,7 @@ export const useScreensStore = defineStore('screens', {
                         this.currentScreen.settings.aspect_ratio_mode = fitMode;
                     }
                 }
+                notifyScreenUpdate(screenId);
                 const label = fitMode === 'cover' ? 'Full Screen (Edge-to-Edge)' : (fitMode === 'contain' ? 'Fit Screen (Letterbox)' : 'Boxed Card');
                 useToastStore().success('Updated All Slides', `All playlist slides set to ${label}.`);
                 return response.data.slides;
@@ -263,9 +274,11 @@ export const useScreensStore = defineStore('screens', {
             this.saving = true;
             try {
                 await api.delete(`/slides/${slideId}`);
+                const targetScreenId = this.currentScreen?.id;
                 if (this.currentScreen) {
                     this.currentScreen.slides = this.currentScreen.slides.filter(s => s.id !== slideId);
                 }
+                notifyScreenUpdate(targetScreenId);
                 useToastStore().success('Deleted', 'Slide removed from screen.');
             } catch (err) {
                 useToastStore().error('Delete Failed', err.response?.data?.message || 'Error');
@@ -286,6 +299,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen && this.currentScreen.id === screenId) {
                     this.currentScreen = response.data.screen;
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Settings Saved', 'Screen properties and display settings saved successfully.');
                 return response.data.screen;
             } catch (err) {
@@ -304,6 +318,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.settings = response.data.settings;
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Settings Saved', 'Display settings updated.');
                 return response.data.settings;
             } catch (err) {
@@ -323,6 +338,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.settings = response.data.settings;
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().success('Logo Uploaded', 'Screen branding logo updated.');
                 return response.data.settings;
             } catch (err) {
@@ -340,6 +356,7 @@ export const useScreensStore = defineStore('screens', {
                 if (this.currentScreen) {
                     this.currentScreen.settings = response.data.settings;
                 }
+                notifyScreenUpdate(screenId);
                 useToastStore().info('Logo Removed', 'Screen will not display overlay logo.');
             } catch (err) {
                 useToastStore().error('Error', err.response?.data?.message || 'Failed to remove logo');

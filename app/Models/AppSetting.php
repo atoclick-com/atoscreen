@@ -53,27 +53,48 @@ class AppSetting extends Model
 
     public static function instance(): self
     {
-        return static::firstOrCreate([], [
-            'app_name' => 'AtoFood Signage',
-            'business_name' => 'Trotiluxe',
-            'display_domain' => 'trotiluxe.ma',
-            'default_slide_duration' => 10,
-            'default_transition' => 'fade',
-            'default_orientation' => 'landscape',
-            'operating_hours_enabled' => false,
-            'opening_time' => '08:00',
-            'closing_time' => '23:00',
-            'instagram_handle' => '@trotiluxe',
-            'contact_email' => 'contact@trotiluxe.ma',
-            'master_pin' => '1234',
-        ]);
+        try {
+            return static::firstOrCreate([], [
+                'app_name' => 'AtoFood Signage',
+                'business_name' => 'Trotiluxe',
+                'display_domain' => 'trotiluxe.ma',
+                'default_slide_duration' => 10,
+                'default_transition' => 'fade',
+                'default_orientation' => 'landscape',
+                'operating_hours_enabled' => false,
+                'opening_time' => '08:00',
+                'closing_time' => '23:00',
+                'instagram_handle' => '@trotiluxe',
+                'contact_email' => 'contact@trotiluxe.ma',
+                'master_pin' => '1234',
+            ]);
+        } catch (\Throwable $e) {
+            return new static([
+                'app_name' => 'AtoFood Signage',
+                'business_name' => 'Trotiluxe',
+                'display_domain' => 'trotiluxe.ma',
+                'default_slide_duration' => 10,
+                'default_transition' => 'fade',
+                'default_orientation' => 'landscape',
+                'operating_hours_enabled' => false,
+                'opening_time' => '08:00',
+                'closing_time' => '23:00',
+                'instagram_handle' => '@trotiluxe',
+                'contact_email' => 'contact@trotiluxe.ma',
+                'master_pin' => '1234',
+            ]);
+        }
     }
 
     public static function get(string $key, $default = null)
     {
-        $setting = static::first();
-        if ($setting && isset($setting->$key)) {
-            return $setting->$key;
+        try {
+            $setting = static::first();
+            if ($setting && isset($setting->$key)) {
+                return $setting->$key;
+            }
+        } catch (\Throwable $e) {
+            // Table may not exist yet
         }
         return $default;
     }

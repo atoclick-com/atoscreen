@@ -8,10 +8,12 @@ use Illuminate\Foundation\Configuration\Middleware;
 $baseDir = dirname(__DIR__);
 $envPath = $baseDir . '/.env';
 
+// 1. Ensure .env exists
 if (!file_exists($envPath) && file_exists($baseDir . '/.env.example')) {
     @copy($baseDir . '/.env.example', $envPath);
 }
 
+// 2. Ensure APP_KEY exists and is valid
 if (file_exists($envPath)) {
     $envContent = file_get_contents($envPath);
     if (!preg_match('/^APP_KEY=base64:[a-zA-Z0-9+\/=]{44}/m', $envContent)) {
@@ -28,13 +30,57 @@ if (file_exists($envPath)) {
     }
 }
 
+// 3. Ensure SQLite database exists with write permissions
 $sqlitePath = $baseDir . '/database/database.sqlite';
 if (!file_exists($sqlitePath) && is_dir($baseDir . '/database')) {
     @touch($sqlitePath);
     @chmod($sqlitePath, 0666);
 }
 
-return Application::configure(basePath: $baseDir)
+// 4. Ensure all framework storage folders exist with full permissions
+$storageDirs = [
+    $baseDir . '/storage',
+    $baseDir . '/storage/app',
+    $baseDir . '/storage/app/public',
+    $baseDir . '/storage/framework',
+    $baseDir . '/storage/framework/views',
+    $baseDir . '/storage/framework/cache',
+    $baseDir . '/storage/framework/cache/data',
+    $baseDir . '/storage/framework/sessions',
+    $baseDir . '/storage/framework/testing',
+    $baseDir . '/storage/logs',
+    $baseDir . '/bootstrap/cache',
+];
+
+foreach ($storageDirs as $dir) {
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0777, true);
+    }
+    @chmod($dir, 0777);
+}
+
+// 5. Test if storage/framework/views is truly writable by PHP worker
+$viewsDir = $baseDir . '/storage/framework/views';
+$probeFile = $viewsDir . '/.probe_' . uniqid();
+$viewsWritable = false;
+if (@file_put_contents($probeFile, '1') !== false) {
+    @unlink($probeFile);
+    $viewsWritable = true;
+}
+
+if (!$viewsWritable) {
+    // Fallback to system temporary directory (always writable by web process)
+    $fallbackViews = rtrim(sys_get_temp_dir(), '/\\') . '/atoscreen_views';
+    if (!is_dir($fallbackViews)) {
+        @mkdir($fallbackViews, 0777, true);
+    }
+    @chmod($fallbackViews, 0777);
+    putenv("VIEW_COMPILED_PATH={$fallbackViews}");
+    $_ENV['VIEW_COMPILED_PATH'] = $fallbackViews;
+    $_SERVER['VIEW_COMPILED_PATH'] = $fallbackViews;
+}
+
+$app = Application::configure(basePath: $baseDir)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -45,5 +91,31 @@ return Application::configure(basePath: $baseDir)
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Intercept any stray tempnam notices/exceptions and still render the app
+        $exceptions->render(function (\ErrorException $e) {
+            if (str_contains($e->getMessage(), 'tempnam()')) {
+                return response()->view('app');
+            }
+        });
     })->create();
+
+// 6. Suppress harmless PHP tempnam() E_NOTICE on shared hosting/cPanel
+$app->booted(function () use ($sqlitePath) {
+    set_error_handler(function ($severity, $message, $file = '', $line = 0) {
+        if (str_contains($message, 'tempnam()')) {
+            return true; // suppress notice so Laravel doesn't throw ErrorException
+        }
+        return false;
+    }, E_NOTICE | E_WARNING);
+
+    // Auto-migrate SQLite on first run if database is empty
+    try {
+        if (file_exists($sqlitePath) && filesize($sqlitePath) === 0) {
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        }
+    } catch (\Throwable $e) {
+        // Migration will be handled via setup wizard or artisan
+    }
+});
+
+return $app;

@@ -162,10 +162,16 @@ class DisplayController extends Controller
             }
         }
 
+        $appSettings = \App\Models\AppSetting::instance();
+        $latestUpdated = $screen->updated_at;
+        if ($appSettings->updated_at && $appSettings->updated_at->gt($latestUpdated)) {
+            $latestUpdated = $appSettings->updated_at;
+        }
+
         return response()->json([
             'status' => 'ok',
             'server_time' => now()->toISOString(),
-            'screen_updated_at' => $screen->updated_at->toISOString(),
+            'screen_updated_at' => $latestUpdated->toISOString(),
             'auto_refresh_interval' => $screen->settings?->auto_refresh_interval ?? 60,
         ]);
     }
