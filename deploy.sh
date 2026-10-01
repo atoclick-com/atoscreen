@@ -18,7 +18,24 @@ cd $APP_DIR
 git fetch origin main
 git reset --hard origin/main
 
-# 3. Fix Permissions
+# 3. Environment & Key Configuration
+if [ ! -f .env ]; then
+    echo "Creating .env from .env.example..."
+    cp .env.example .env
+fi
+
+if ! grep -q "^APP_KEY=base64:" .env; then
+    echo "Generating Application Key..."
+    php artisan key:generate --force
+fi
+
+if [ ! -f database/database.sqlite ]; then
+    echo "Creating database.sqlite..."
+    touch database/database.sqlite
+fi
+chmod 666 database/database.sqlite 2>/dev/null || true
+
+# 4. Fix Permissions
 echo "Fixing file and storage permissions..."
 mkdir -p storage/framework/{sessions,views,cache/data} storage/logs storage/app/public bootstrap/cache
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
@@ -27,7 +44,7 @@ find . -type f -exec chmod 644 {} +
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 chmod +x deploy.sh
 
-# 4. Update Dependencies & Database
+# 5. Update Dependencies & Database
 echo "Updating Composer dependencies..."
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
