@@ -145,12 +145,17 @@ class DisplayController extends Controller
             ];
         });
 
+        $latestUpdated = $screen->updated_at;
+        if ($appSettings->updated_at && (!$latestUpdated || $appSettings->updated_at->gt($latestUpdated))) {
+            $latestUpdated = $appSettings->updated_at;
+        }
+
         // Generate checksum hash so display client detects any slide or setting modification
         $playlistChecksum = md5(json_encode([
-            'screen_updated' => $screen->updated_at?->timestamp,
+            'screen_id' => $screen->id,
+            'screen_updated' => $latestUpdated?->timestamp,
             'settings' => (array) $settings,
             'slides' => $formattedSlides->toArray(),
-            'app_updated' => $appSettings->updated_at?->timestamp,
         ]));
 
         return response()->json([
@@ -164,7 +169,7 @@ class DisplayController extends Controller
                 'transition_effect' => $screen->transition_effect ?: ($appSettings->default_transition ?: 'fade'),
                 'orientation' => $screen->orientation ?: ($appSettings->default_orientation ?: 'landscape'),
                 'resolution_hint' => $screen->resolution_hint,
-                'updated_at' => $screen->updated_at,
+                'updated_at' => $latestUpdated?->toISOString(),
             ],
             'settings' => $settings,
             'slides' => $formattedSlides,
@@ -187,36 +192,45 @@ class DisplayController extends Controller
             return response()->json(['error' => 'Screen not found'], 404);
         }
 
-        $screen->forceFill([
-            'last_ping_at' => now(),
-        ])->saveQuietly();
+        // Update last_ping_at directly without updating updated_at timestamp!
+        \Illuminate\Support\Facades\DB::table('screens')
+            ->where('id', $screen->id)
+            ->update(['last_ping_at' => now()]);
 
-        // If client reported which slide is playing, log to slide_plays
+        // If client reported which slide is playing, throttle logging to avoid duplicate rows every 3.5s
         if ($request->filled('current_slide_id')) {
-            $slide = Slide::where('id', $request->input('current_slide_id'))
-                ->where('screen_id', $screen->id)
-                ->first();
+            $slideId = $request->input('current_slide_id');
+            $recentPlay = SlidePlay::where('screen_id', $screen->id)
+                ->where('slide_id', $slideId)
+                ->where('played_at', '>=', now()->subSeconds(15))
+                ->exists();
 
-            if ($slide) {
-                SlidePlay::create([
-                    'screen_id' => $screen->id,
-                    'slide_id' => $slide->id,
-                    'played_at' => now(),
-                    'duration_seconds' => $request->input('duration_seconds', null),
-                ]);
+            if (!$recentPlay) {
+                $slide = Slide::where('id', $slideId)
+                    ->where('screen_id', $screen->id)
+                    ->first();
+
+                if ($slide) {
+                    SlidePlay::create([
+                        'screen_id' => $screen->id,
+                        'slide_id' => $slide->id,
+                        'played_at' => now(),
+                        'duration_seconds' => $request->input('duration_seconds', null),
+                    ]);
+                }
             }
         }
 
         $appSettings = \App\Models\AppSetting::instance();
         $latestUpdated = $screen->updated_at;
-        if ($appSettings->updated_at && $appSettings->updated_at->gt($latestUpdated)) {
+        if ($appSettings->updated_at && (!$latestUpdated || $appSettings->updated_at->gt($latestUpdated))) {
             $latestUpdated = $appSettings->updated_at;
         }
 
         return response()->json([
             'status' => 'ok',
             'server_time' => now()->toISOString(),
-            'screen_updated_at' => $latestUpdated->toISOString(),
+            'screen_updated_at' => $latestUpdated?->toISOString(),
             'auto_refresh_interval' => $screen->settings?->auto_refresh_interval ?? 60,
         ]);
     }

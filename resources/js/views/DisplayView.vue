@@ -170,37 +170,55 @@ const fetchPlaylist = async (isInitial = false, forceImmediate = false) => {
                 startSlideTimer();
             }
         } else {
-            // Apply immediately if checksum changed or forced by real-time sync
-            if (data.checksum !== playlistChecksum.value || forceImmediate) {
-                console.log('[DisplayView] Playlist or settings update detected, applying changes immediately.');
-                screen.value = data.screen;
-                settings.value = data.settings;
-                playlistChecksum.value = data.checksum;
-                checkOperatingHours();
+            const isChecksumDifferent = data.checksum !== playlistChecksum.value;
 
-                // Preserve current slide position if valid, else clamp
-                const currentPlayingId = currentSlide.value?.id;
-                slides.value = data.slides;
-                pendingPlaylist.value = null;
+            // Always update screen metadata and settings without interrupting slide playback
+            screen.value = data.screen;
+            settings.value = data.settings;
+            checkOperatingHours();
 
-                if (slides.value.length > 0) {
-                    const foundIndex = slides.value.findIndex(s => s.id === currentPlayingId);
-                    if (foundIndex !== -1) {
-                        currentSlideIndex.value = foundIndex;
-                    } else if (currentSlideIndex.value >= slides.value.length) {
-                        currentSlideIndex.value = 0;
+            // If the playlist checksum is identical and not forced, DO NOT interrupt active playback!
+            if (!isChecksumDifferent && !forceImmediate) {
+                return;
+            }
+
+            console.log('[DisplayView] Playlist change detected, updating slides.');
+            playlistChecksum.value = data.checksum;
+
+            // Preserve current slide position if valid, else clamp
+            const currentPlayingId = currentSlide.value?.id;
+            const previousDuration = currentSlide.value?.duration;
+            slides.value = data.slides;
+            pendingPlaylist.value = null;
+
+            if (slides.value.length > 0) {
+                const foundIndex = slides.value.findIndex(s => s.id === currentPlayingId);
+                if (foundIndex !== -1) {
+                    currentSlideIndex.value = foundIndex;
+                    // If duration changed or timer was lost, restart slide timer
+                    const newDuration = slides.value[foundIndex]?.duration;
+                    if (!slideTimer || (newDuration && newDuration !== previousDuration)) {
+                        startSlideTimer();
                     }
+                } else if (currentSlideIndex.value >= slides.value.length) {
+                    currentSlideIndex.value = 0;
                     preloadNextSlide();
                     startSlideTimer();
                 } else {
-                    currentSlideIndex.value = 0;
-                    if (slideTimer) clearTimeout(slideTimer);
+                    preloadNextSlide();
+                    startSlideTimer();
                 }
-
-                try {
-                    localStorage.setItem(cacheKey.value, JSON.stringify(data));
-                } catch (e) {}
+            } else {
+                currentSlideIndex.value = 0;
+                if (slideTimer) {
+                    clearTimeout(slideTimer);
+                    slideTimer = null;
+                }
             }
+
+            try {
+                localStorage.setItem(cacheKey.value, JSON.stringify(data));
+            } catch (e) {}
         }
     } catch (err) {
         console.warn('Playlist fetch failed, falling back to cache if available:', err);
@@ -344,13 +362,13 @@ const sendHeartbeat = async () => {
         });
         isOffline.value = false;
 
-        // If server indicates screen was modified, poll for fresh playlist immediately
+        // If server indicates screen was modified, poll for fresh playlist
         if (response.data?.screen_updated_at && screen.value?.updated_at) {
             const serverTime = new Date(response.data.screen_updated_at).getTime();
             const localTime = new Date(screen.value.updated_at).getTime();
-            if (serverTime > localTime) {
+            if (serverTime - localTime > 1000) {
                 console.log('[DisplayView] Server modification detected via ping heartbeat, fetching latest playlist.');
-                fetchPlaylist(false, true);
+                fetchPlaylist(false, false);
             }
         }
     } catch (e) {
@@ -521,7 +539,7 @@ onUnmounted(() => {
         <template v-else>
             <!-- Transitions Container -->
             <Transition :name="transitionName" mode="out-in">
-                <div :key="currentSlide.id" class="absolute inset-0 w-full h-full">
+                <div :key="currentSlide.id + '_' + currentSlideIndex" class="absolute inset-0 w-full h-full">
                     <!-- Image Slide -->
                     <KenBurnsImage
                         v-if="currentSlide.type === 'image'"
